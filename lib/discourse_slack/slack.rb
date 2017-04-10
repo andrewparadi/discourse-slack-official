@@ -10,12 +10,13 @@ module DiscourseSlack
       I18n.t("slack.command.past.#{filter}")
     end
 
-    def self.excerpt(html, max_length)
-      doc = Nokogiri::HTML.fragment(html)
-      doc.css(".lightbox-wrapper .meta").remove
-      html = doc.to_html
+    def self.excerpt(post, max_length = SiteSetting.slack_discourse_excerpt_length)
+      doc = Nokogiri::HTML.fragment(post.excerpt(max_length,
+        remap_emoji: true,
+        keep_onebox_source: true
+      ))
 
-      SlackParser.get_excerpt(html, max_length)
+      SlackMessageFormatter.format(doc.to_html)
     end
 
     def self.format_channel(name)
@@ -90,7 +91,7 @@ module DiscourseSlack
         author_name: display_name,
         author_icon: post.user.small_avatar_url,
         color: "##{topic.category.color}",
-        text: ::DiscourseSlack::Slack.excerpt(post.cooked, SiteSetting.slack_discourse_excerpt_length),
+        text: ::DiscourseSlack::Slack.excerpt(post),
         mrkdwn_in: ["text"]
       }
 
@@ -154,7 +155,7 @@ module DiscourseSlack
       return if post.blank?
 
       topic = post.topic
-      return if post.topic.blank? && (post.topic.archetype == Archetype.private_message || post.post_type != Post.types[:regular])
+      return if post.topic.blank? || (post.topic.archetype == Archetype.private_message || post.post_type != Post.types[:regular])
 
       http = Net::HTTP.new(SiteSetting.slack_access_token.empty? ? "hooks.slack.com" : "slack.com" , 443)
       http.use_ssl = true
